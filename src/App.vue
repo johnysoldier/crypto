@@ -244,7 +244,7 @@
 </template>
 
 <script>
-import { loadTicker } from "./api";
+import { subscribeToTicker, unsubscribeFromTicker } from "./api";
 
 export default {
   name: "App",
@@ -278,9 +278,13 @@ export default {
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach((ticker) => {
-        this.subscribeToUbdates(ticker.name);
+        subscribeToTicker(ticker.name, (newPrice) =>
+          this.updateTicker(ticker.name, newPrice)
+        );
       });
     }
+
+    setInterval(this.updateTickers, 5000);
   },
 
   computed: {
@@ -325,20 +329,22 @@ export default {
   },
 
   methods: {
-    subscribeToUbdates(tickerName) {
-      setInterval(async () => {
-        const exchangeData = await loadTicker(tickerName);
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+          if (t === this.selectedTicker) {
+            this.graph.push(price);
+          }
+          t.price = price;
+        });
+    },
 
-        this.tickers.find((t) => t.name === tickerName).price =
-          exchangeData.USD > 1
-            ? exchangeData.USD.toFixed(2)
-            : exchangeData.USD.toPrecision(2);
-
-        if (this.selectedTicker?.name === tickerName) {
-          this.graph.push(exchangeData.USD);
-        }
-      }, 3000);
-      this.ticker = "";
+    formatPrice(price) {
+      if (price === "-") {
+        return price;
+      }
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
     add() {
@@ -348,9 +354,11 @@ export default {
       };
 
       this.tickers = [...this.tickers, currentTicker];
+      this.ticker = "";
       this.filter = "";
-
-      this.subscribeToUbdates(currentTicker.name);
+      subscribeToTicker(currentTicker.name, (newPrice) =>
+        this.updateTicker(currentTicker.name, newPrice)
+      );
     },
 
     select(ticker) {
@@ -362,6 +370,7 @@ export default {
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
+      unsubscribeFromTicker(tickerToRemove.name);
     },
   },
 
